@@ -537,6 +537,7 @@ async def webhook_update_sensor_states(hass, config_entry, data):
 
     device_name = config_entry.data[ATTR_DEVICE_NAME]
     resp = {}
+    entity_registry = er.async_get(hass)
 
     for sensor in data:
         entity_type = sensor[ATTR_SENSOR_TYPE]
@@ -545,9 +546,10 @@ async def webhook_update_sensor_states(hass, config_entry, data):
 
         unique_store_key = f"{config_entry.data[CONF_WEBHOOK_ID]}_{unique_id}"
 
-        entity_registry = er.async_get(hass)
-        if not entity_registry.async_get_entity_id(
-            entity_type, DOMAIN, unique_store_key
+        if not (
+            entity_id := entity_registry.async_get_entity_id(
+                entity_type, DOMAIN, unique_store_key
+            )
         ):
             _LOGGER.error(
                 "Refusing to update %s non-registered sensor: %s",
@@ -581,6 +583,12 @@ async def webhook_update_sensor_states(hass, config_entry, data):
         async_dispatcher_send(hass, SIGNAL_SENSOR_UPDATE, sensor)
 
         resp[unique_id] = {"success": True}
+
+        # Check if disabled
+        entry = entity_registry.async_get(entity_id)
+
+        if entry.disabled_by:
+            resp[unique_id]["is_disabled"] = True
 
     return webhook_response(resp, registration=config_entry.data)
 
